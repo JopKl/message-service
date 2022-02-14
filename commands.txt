@@ -1,0 +1,3 @@
+In case sockets doesn't close after terminating server:
+	kill -9 $(ps -A | grep python | awk '{print $1}')
+

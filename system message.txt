@@ -1,0 +1,12 @@
+'Username' Server requests the username of the cient
+
+
+Commands:
+	/help - Get this command list
+	/usr {username} {message} - send private message to an user
+	/room-msg {room name} {message} - send message to a chat room
+	/room-rename {room name} {new name} - renames a room
+	/room-add-usr {room name} {username} - add an user to the room
+	/room-remove-usr {room name} {username} - removes an user from the room
+	/room-delete {room name} - removes a room
+
