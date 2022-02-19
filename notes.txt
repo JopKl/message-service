@@ -1,3 +1,0 @@
--Terminating the applications might leave the sockets running in the background,
-occupying ports
-

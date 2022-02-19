@@ -1,5 +1,6 @@
 import socket
 from client_functions import*
+import threading
 
 PORT_IPV4 = 50000
 PORT_IPV6 = 50001
@@ -31,8 +32,7 @@ def main():
 	receive_thread = threading.Thread(target=receive,args=(client,username))
 	receive_thread.start()
 
-	message_thread = threading.Thread(target=message,args=(client,username,
-															online))
+	message_thread = threading.Thread(target=message,args=(client,username))
 	message_thread.start()
 	
 if __name__ == "__main__": 
