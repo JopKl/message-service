@@ -14,18 +14,17 @@ HELP = '''Commands:
 COMMAND_LIST = ['/help', '/msg', '/room-msg', '/room-rename', '/room-add-usr',
 	'/room-remove-usr']
 
-# List of server response protocols----------------------------------------------
+# List of server response protocols---------------------------------------------
 
 # For users
-USR = 21							#Message from users
-USR_SEND_ACK = 22
-USR_RECV_ACK = 23
+USR_MSG = '21'							#Message from/to users
+USR_OFFLINE = '22'
+USR_READ_ACK = '23'
 
 # For rooms 
-ROOM_MSG = 31					#Message to rooms
-ROOM_MSG_SEND_ACK = 32
-MEMBER_ADD_ACK = 33
-MEMBER_DEL_ACK = 34
+ROOM_MSG = '31'					#Message to rooms
+MEMBER_ADD_ACK = '32'
+MEMBER_DEL_ACK = '33'
 #-------------------------------------------------------------------------------
 
 # Return UTC time stamp
@@ -40,8 +39,9 @@ def receive(client,username):
 	while True:
 		try:
 			msg = client.recv(1024).decode(FORMAT)
-			if msg == 'Username':
-				client.send(username.encode(FORMAT))
+			if msg == 'USERNAME':
+				response = '{} {}'.format(getTime(), username)
+				client.send(response.encode(FORMAT))
 			else:
 				#handle cases here
 				print(msg)
@@ -50,11 +50,9 @@ def receive(client,username):
 			client.close()
 			break
 
-def formatMessage(msg, username):
-	# Message example 12345.123 sender_username /room-msg room_name hi
-	#				  [0]		[1]       		[2.1]     [2.2]     [2.3]
-	#				  time      username        command   target    detail
-	formatted_msg = '{} {} {}'.format(getTime(), username, msg)
+def formatMessage(protocol, sender, target, content):
+	formatted_msg = '{} {} {} {} {}'.format(protocol, getTime(), sender, 
+											target, content)
 	return formatted_msg
 
 def message(client,username):
@@ -78,6 +76,15 @@ def message(client,username):
 					if len(msg_split) < 3:
 						print("Please enter the correct command: see /help")
 					else:
-						target_msg = formatMessage(msg, username)
-						client.send(target_msg.encode(FORMAT))
-						print('Sent {}'.format(target_msg))
+
+						target = msg_split[1]
+						content = ' '.join(msg_split[2:])
+
+						if command == '/msg':
+							target_msg = formatMessage(USR_MSG, username, 
+											target,content)
+							client.send(target_msg.encode(FORMAT))
+							print('Sent {}'.format(target_msg))
+
+						else:
+							print('Unimplimented')

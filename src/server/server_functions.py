@@ -20,39 +20,37 @@ MESSAGE_MIN_LEN = 5
 # 9 : Print all
 VERBOSE = (32, 21)
 
-USR_TEMPLATE = {0: None,	# Client's socket.Socket() object
-				1 : True,	# Whether client is online or not
-				2 : 0, 		# Last online time
-				3 : []		# Buffer list of messages this client will receive
-				}
 
-# Server protocols
+# List of server response protocols---------------------------------------------
 
-ANALYZE = 0
+OFFLINE = 0
+ONLINE = 1
 
 UPDATE_USR = 11					#Add/update user to database
 CREATE_ROOM = 12					# Create chatroom
 
-USR = 21							#Message from users
-USR_SEND_ACK = 22
-USR_RECV_ACK = 23
+# For users
+USR_MSG = '21'							#Message from/to users
+USR_OFFLINE = '22'
+USR_READ_ACK = '23'
 
-ROOM_MSG = 31					#Message to rooms
-ROOM_MSG_SEND_ACK = 32
-MEMBER_ADD_ACK = 33
-MEMBER_DEL_ACK = 34
+# For rooms 
+ROOM_MSG = '31'					#Message to rooms
+MEMBER_ADD_ACK = '32'
+MEMBER_DEL_ACK = '33'
+#-------------------------------------------------------------------------------
 
-# Message queue structure:
-# for each queue, add a tuple:
-# 	(protocol, username, msg)
 
-def printDatabase(client_id):
-	print('++++++++++++++++++++')
-	for usr in client_id.keys():
-		print('{}:'.format(usr))
-		for cat,val in client_id[usr].items():
-			print('\t{}:  {}'.format(cat,val))
-	print('++++++++++++++++++++')
+
+def printDatabase(client_data):
+	print('[{}]------------------------'.format(getLocalTime()))
+	for usr, data in client_data.items():
+		print('\t{}:'.format(usr))
+		print('\tAddress: {}'.format(data[0]))	
+		print('\tOnline: {}'.format(data[1]))
+		print('\tLast online: {}'.format(data[2]))
+		print('.....................')
+	print('----------------------------')
 
 def getLocalTime():
 	now = datetime.datetime.now()
@@ -90,120 +88,125 @@ def msgBreakDown(msg):
 	return time, sender, command, target, detail
 
 def updateUsers(client_data,usr_queue):
-	# queue example (username, socket(), sent time)
-	#                [0]       [1]       [2]
-	while not usr_queue.empty():
-
-		user = usr_queue.get()
-		username = user[0]
-		client = user[1]
-		time = user[2]
-
-		if username not in client_data.keys():
-			client_data[username] = USR_TEMPLATE
-			if (11 or 10 or 9) in VERBOSE:
-				print('[{}] adding user {} to database'.format(getLocalTime(), 
-					username))
-		if (11 or 10 or 9) in VERBOSE:
-			print('[{}] Updating user {}'.format(getLocalTime(), username))
-		#update socket instance
-		client_data[username] [0] = client
-
-		#update online status
-		client_data[username] [1] = True
-
-		#update online time
-		client_data[username] [2] = time
-
-def processQueue(client_data, msg_queue):
-	while not msg_queue.empty():
-		msg = msg_queue.get()
-		time, sender, command, target, detail = msgBreakDown(msg)
-
-		client_data[sender][2] = time
-		if (11 or 10 or 9) in VERBOSE:
-			print('[{}] processing message from {}'.format(getLocalTime(),
-				sender))
-		# Check if the target exists -------------------------------------------
-		if target not in client_data.keys():
-			client_data[sender][0].send('ERROR User does not exist'.encode(
-																		FORMAT))
-			continue
-		# ----------------------------------------------------------------------
-		
-		if command == '/msg':
-			target_client = client_data[target][0]
-			sent_msg = getTargetMsg(USR, time, sender, detail)
-
-			if client_data[target][1]:
-				# If the usr is online, send message
-				target_client.send(sent_msg.encode(FORMAT))
-			else:
-				# If the user if offline send to buffer
-				client_data[target][3].append(sent_msg)
-
-		elif command == '/room-msg':
-			pass
-		elif command == '/room-rename':
-			pass
-		elif command == '/room-add-usr':
-			pass
-		elif command == '/room-remove-usr':
-			pass
-		else:
-			client_data[sender][0].send(
-				'ERROR: Can not process command, please try again'.encode(FORMAT))
-			continue
-		
-def processBuffer(client_data):
-	if (11 or 10 or 9) in VERBOSE:
-		print('\n[{}] Start handling the buffer------------'.format(getLocalTime()))
-	for user, data in client_data.items():
-		# If the user is online, send buffered data
-		client = data[0]
-		if data[1]:
-			if (11 or 10 or 9) in VERBOSE:
-				print('[{}] Processing buffer for {}'.format(getLocalTime(), user))
-			for msg in data[3]:
-				client.send(msg.encode(FORMAT))
-			# Clear the buffer after sending all messages
-			data[3].clear()
-	if (11 or 10 or 9) in VERBOSE:
-		print('[{}] Finished handling the buffer---------\n'.format(getLocalTime()))
-
-def handle(client_data, msg_queue,usr_queue):
 	while True:
 		if not usr_queue.empty():
-			updateUsers(client_data, usr_queue)
+			user = usr_queue.get()
+			status = user[0]
+			username = user[1]
+			time = float(user[2])
 
-		if not msg_queue.empty():
-			processQueue(client_data, msg_queue)
+			if status == ONLINE:
+				client = user[3]
 
-		processBuffer(client_data)
+				if username not in client_data.keys():
+					print('[{}] {} is not in database, adding now'.format(
+						getLocalTime(),username))
+					client_data[username] = {0: None,1 : True,	2 : 0}
+
+					print('\nTest 1~~~~~~~~~~~~~~~~~~~~~~~')
+					printDatabase(client_data)
+					print('\nTest 1~~~~~~~~~~~~~~~~~~~~~~~')
+
+					if (11 or 10 or 9) in VERBOSE:
+						print('[{}] Adding user {} to database'.format(
+							getLocalTime(), username))
+
+				if (11 or 10 or 9) in VERBOSE:
+					print('[{}] Updating user {}'.format(getLocalTime(), 
+						username))
 				
-def receive(msg_queue,server):
-	# Get messages
+				# update socket instance
+				client_data[username] [0] = client
+
+				print('\n Test2~~~~~~~~~~~~~~~~~~~~~~~')
+				printDatabase(client_data)
+				print('\n Test2~~~~~~~~~~~~~~~~~~~~~~~')
+				# update online status
+				client_data[username] [1] = True
+				# update online time
+				client_data[username] [2] = time
+			else:
+				# update offline status
+				client_data[username] [1] = False
+				# update last online time
+				client_data[username] [2] = time
+
+			print('\nAfter adding {}:'.format(username))
+			printDatabase(client_data)
+
+def processQueue(client_data, msg_queue):
+	offline_queue = queue.Queue()
+	while True:
+		if not msg_queue.empty():
+			current_msg = msg_queue.get()
+			splitted_msg = current_msg.split()
+			protocol = splitted_msg[0]
+			# time = splitted_msg[1]
+			# sender = splitted_msg[2]
+			target = splitted_msg[3]
+			# content = splitted_msg[4]
+
+			if protocol == USR_MSG:
+				# If the recipient is onine
+				if client_data[target][1]:
+					client = client_data[target][0]
+					try:
+						client.send(current_msg.encode(FORMAT))
+					except Exception as error:
+						print('[{}] {}'.format(getLocalTime(), error))
+						offline_queue.put(current_msg)
+					
+				else:
+					offline_queue.put(current_msg)
+			else:
+				print('[{}] Unimplemented: {}'.format(getLocalTime(),
+													current_msg))
+				continue
+
+		
+def processBuffer(client_data):
+	pass
+
+def handle(client,username,msg_queue,usr_queue):
+	while True:
+		try:
+			message = client.recv(1024).decode(FORMAT)
+			msg_queue.put(message)
+		except:
+			usr_queue.put((OFFLINE, username, getTime()))
+			client.close()
+			break
+
+	pass
+				
+def receive(server, msg_queue,usr_queue):
+	# Get messages and create new client threads
 	while(True):
-		if (21 or 20 or 9) in VERBOSE:
-			print('[{}] Receiving new messages'.format(getLocalTime()))
-		msg = server.recv(1024).decode(FORMAT)
-		if len(msg.split) >= MESSAGE_MIN_LEN:
-			msg_queue.put(msg)
+		if (31 or 30 or 9) in VERBOSE:
+			print('[{}] Receiving new connections'.format(getLocalTime()))
+
+		client, address = server.accept()
+		print('Connected with ' + str(address))
+
+		try:
+			client.send('USERNAME'.encode(FORMAT))
+			response = client.recv(1024).decode(FORMAT)
+		except Exception as error:
+			print('[{}] Error receiving user {}'.format(getLocalTime(), 
+				address))
+
+		resp = response.split()
+		time = resp[0]
+		username = resp[1]
+		usr_queue.put((ONLINE, username, time, client))
+
+		print('[{}] Connected with {}'.format(getLocalTime(), username))
+		
+		client_thread = threading.Thread(target=handle,args=(client, username,
+														msg_queue,usr_queue))
+		client_thread.start()
+
 
 def welcome(client, address,usr_queue):	
 	# Get new connections
-	try:
-		if (32 or 30 or 9) in VERBOSE:
-			print('[{}] Sending username confirmation to {}'.format(
-				getLocalTime(), address))
-		client.send('Username'.encode(FORMAT))
-		username = client.recv(1024).decode(FORMAT)
-	except Exception as error:
-		print('[{}] Error receiving user {}'.format(getLocalTime(), address))
-
-	print('[{}] Connected with {}'.format(getLocalTime(), username))
-
-	if (32 or 30 or 9) in VERBOSE:
-		print('[{}] Sending user to database'.format(getLocalTime()))
-
-	usr_queue.put((username, client, getTime()))
+	pass

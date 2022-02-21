@@ -16,14 +16,14 @@ def main():
 
 	if IPV6 is False:
 		client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		#client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		try:
 			client.connect((HOST_IPV4, PORT_IPV4))
 		except socket.error() as error:
 			print("IPV4 connection error: " + str(error))
 	elif socket.has_ipv6():
 		client = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-		client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		#client.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		try:
 			client.connect((HOST_IPV6, PORT_IPV6))
 		except socket.error() as error:
