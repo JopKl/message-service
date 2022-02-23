@@ -2,8 +2,7 @@ import queue
 import socket 
 import threading
 import datetime
-
-from cairo import Status
+import errno
 
 # Encoding format
 FORMAT = 'ascii'
@@ -27,11 +26,11 @@ VERBOSE = (32, 21, 40)
 
 # List of server response protocols---------------------------------------------
 
-OFFLINE = 0
-ONLINE = 1
+OFFLINE = '100'
+ONLINE = '101'
 
-UPDATE_USR = 11					#Add/update user to database
-CREATE_ROOM = 12					# Create chatroom
+UPDATE_USR = '11'					#Add/update user to database
+CREATE_ROOM = '12'					# Create chatroom
 
 # For users
 USR_MSG = '21'							#Message from/to users
@@ -43,6 +42,9 @@ USR_NOT_FOUND = '24'
 ROOM_MSG = '31'					#Message to rooms
 MEMBER_ADD_ACK = '32'
 MEMBER_DEL_ACK = '33'
+
+# Testing
+TEST = '40'
 #-------------------------------------------------------------------------------
 
 # user_data structure:
@@ -87,13 +89,13 @@ def updateUsers(client_data,usr_queue):
 	while True:
 		if not usr_queue.empty():
 			user = usr_queue.get()
+
 			status = user[0]
-			username = user[1]
-			time = float(user[2])
+			time = float(user[1])
+			username = user[2]
 
 			if status == ONLINE:
 				client = user[3]
-
 				if username not in client_data.keys():
 					print('[{}] {} is not in database, adding now'.format(
 						getLocalTime(),username))
@@ -121,16 +123,34 @@ def updateUsers(client_data,usr_queue):
 				# update online time
 				client_data[username] [2] = time
 			else:
+				print('[{}] {} disconnected'.format(getLocalTime(), username))
 				# update offline status
 				client_data[username] [1] = False
 				# update last online time
 				client_data[username] [2] = time
 
+				client_data[username] [0].shutdown(socket.SHUT_RDWR)
+				client_data[username] [0].close()
+
 			if (11 or 10 or 9) in VERBOSE:
 				print('\nAfter adding {}:'.format(username))
 				printDatabase(client_data)
+		# clock = process_time()
+		# if clock > 2:
+		# 	for user in client_data.keys():
+		# 		if client_data[user][1]:
+		# 			try:
+		# 				client_data[user][0].send(TEST.encode(FORMAT))
+		# 			except Exception as error:
+		# 				if error.errno == errno.ECONNREFUSED:
+		# 					client_data[username] [1] = False
+		# 					client_data[user][0].shutdown(socket.SHUT_RDWR)
+		# 					client_data[user][0].close
+		# 				else:
+		# 					print('[{}] Error updating user status: {}'.format(
+		# 						getLocalTime(), error))
 
-def processQueue(client_data, msg_queue):
+def processQueue(client_data, msg_queue, usr_queue):
 	offline_buffer = {}
 	while True:
 		if not msg_queue.empty():
@@ -191,11 +211,21 @@ def processQueue(client_data, msg_queue):
 						offline_buffer[target] = [current_msg]
 					else:
 						offline_buffer[target].append(current_msg)
+			elif protocol == OFFLINE:
+				usr_queue.put((protocol, time,splitted_msg[2]))
 			else:
 				print('[{}] Unimplemented: {}'.format(getLocalTime(),
 													current_msg))
 				continue
 
+		for user in offline_buffer:
+			#Check buffer and user online status
+			if user in client_data.keys():
+				if client_data[user][1] and offline_buffer[user]:
+					user_client = client_data[user][0]
+					for message in offline_buffer[user]:
+						user_client.send(message.encode(FORMAT))
+					offline_buffer[user].clear()
 		
 def processBuffer(client_data):
 	pass
@@ -209,16 +239,19 @@ def handle(client,username,msg_queue,usr_queue):
 			print('[{}] Received from {}, length {}: {}'.format(getLocalTime(), 
 				username, len(message),message))
 			msg_queue.put(message)
+		except IOError:
+			break
 		except:
-			usr_queue.put((OFFLINE, username, getTime()))
+			print('[{}] {} lost connection'.format(getLocalTime(), username))
+			usr_queue.put((OFFLINE, getTime(),username))
 			client.close()
 			break
 
 	pass
 				
-def receive(server, msg_queue,usr_queue):
+def receive(server, msg_queue,usr_queue, online):
 	# Get messages and create new client threads
-	while(True):
+	while(online):
 		if (31 or 30 or 9) in VERBOSE:
 			print('[{}] Receiving new connections'.format(getLocalTime()))
 
@@ -235,12 +268,13 @@ def receive(server, msg_queue,usr_queue):
 		resp = response.split()
 		time = resp[0]
 		username = resp[1]
-		usr_queue.put((ONLINE, username, time, client))
+		usr_queue.put((ONLINE, time, username, client))
 
 		print('[{}] Connected with {}'.format(getLocalTime(), username))
 		
 		client_thread = threading.Thread(target=handle,args=(client, username,
 														msg_queue,usr_queue))
+		client_thread.daemon = True
 		client_thread.start()
 
 

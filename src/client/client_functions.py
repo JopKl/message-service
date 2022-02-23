@@ -5,19 +5,23 @@ FORMAT = 'ascii'
 
 HELP = '''Commands:
 	/help - Get this command list
+	/quit - End the program
 	/msg {username} {message} - send private message to an user
 	/room-msg {room name} {message} - send message to a chat room
 	/room-rename {room name} {new name} - renames a room
 	/room-add-usr {room name} {username} - add an user to the room
 	/room-remove-usr {room name} {username} - removes an user from the room'''
 
-COMMAND_LIST = ['/help', '/msg', '/room-msg', '/room-rename', '/room-add-usr',
-	'/room-remove-usr']
+COMMAND_LIST = ['/help','/quit', '/msg', '/room-msg', '/room-rename', 
+	'/room-add-usr','/room-remove-usr']
 
-USER = 0
-ROOM = 1
+USER = '0'
+ROOM = '1'
 
 # List of server response protocols---------------------------------------------
+
+OFFLINE = '100'
+ONLINE = '101'
 
 # For users
 USR_MSG = '21'							#Message from/to users
@@ -29,7 +33,12 @@ USR_NOT_FOUND = '24'
 ROOM_MSG = '31'					#Message to rooms
 MEMBER_ADD_ACK = '32'
 MEMBER_DEL_ACK = '33'
+
+# Testing
+TEST = '40'
 #-------------------------------------------------------------------------------
+
+VERBOSE = ()
 
 # Return UTC time stamp
 def getTime():
@@ -63,8 +72,9 @@ def receive(client,username):
 			msg = client.recv(1024).decode(FORMAT)
 			if len(msg) == 0:
 				continue
-			print('[{}] Received length {}: {}'.format(getLocalTime(), 
-				len(msg),msg))
+			if 1 in VERBOSE:
+				print('[{}] Received length {}: {}'.format(getLocalTime(), 
+					len(msg),msg))
 			splitted_msg = msg.split()
 			#Msg format:
 			# 0: Protocol, 1:Time
@@ -97,6 +107,8 @@ def receive(client,username):
 				print(print_terminal)
 			else:
 				print(msg)
+		except IOError:
+			break
 		except Exception as error:
 			print("Connection error: " + str(error))
 			client.close()
@@ -116,7 +128,6 @@ def message(client,username,database):
 
 		#printMsgList(database)
 		msg = input()
-		
 		if msg[0] != '/':
 			print('This is not a command, use /help to see possible commands')
 		else:
@@ -128,6 +139,14 @@ def message(client,username,database):
 			else:
 				if command == '/help':
 					print(HELP)
+				elif command == '/quit':
+					print('[{}] Closing program'.format(getLocalTime()))
+					report = '{} {} {}'.format(OFFLINE,getTime(),username)
+					client.send(report.encode(FORMAT))
+					online = False
+					client.shutdown(socket.SHUT_RDWR)
+					client.close()
+					break
 				else:
 					# Filter all wrong len here
 					if len(msg_split) < 3:
