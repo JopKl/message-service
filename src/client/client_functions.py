@@ -7,13 +7,14 @@ HELP = '''Commands:
 	/help - Get this command list
 	/quit - End the program
 	/msg {username} {message} - send private message to an user
+	/room-create {room name} - Creates a new room
 	/room-msg {room name} {message} - send message to a chat room
 	/room-rename {room name} {new name} - renames a room
 	/room-add-usr {room name} {username} - add an user to the room
 	/room-remove-usr {room name} {username} - removes an user from the room'''
 
-COMMAND_LIST = ['/help','/quit', '/msg', '/room-msg', '/room-rename', 
-	'/room-add-usr','/room-remove-usr']
+COMMAND_LIST = ['/help','/quit', '/msg', '/room-create','/room-msg', 
+	'/room-rename', '/room-add-usr','/room-remove-usr']
 
 USER = '0'
 ROOM = '1'
@@ -30,7 +31,11 @@ USR_READ_ACK = '23'
 USR_NOT_FOUND = '24'
 
 # For rooms 
+ROOM_CREATE = '30'
+ROOM_CREATE_ACK = '301'
+ROOM_CREATE_DUP = '302'
 ROOM_MSG = '31'					#Message to rooms
+ROOM_MSG_ACK = '311'
 MEMBER_ADD_ACK = '32'
 MEMBER_DEL_ACK = '33'
 
@@ -88,23 +93,39 @@ def receive(client,username):
 					sender, content)
 				print(print_terminal)
 
-				# read_ack = '{} {} {}'.format(USR_READ_ACK, getTime(), username)
-				
-				# client.send(read_ack.encode(FORMAT))
+				read_ack = '{} {} {} {}'.format(USR_READ_ACK, getTime(), 
+					sender,username)
+				client.send(read_ack.encode(FORMAT))
 				
 			elif protocol == USR_OFFLINE:
 				# 2: target (the offline client)
 				target = splitted_msg[2]
-				print_terminal = 'User {} is offline, last seen on {}'.format(
+				print_terminal = 'User [{}] is offline, last seen on {}'.format(
 					target, convertDateTime(time))
 				print(print_terminal)
-			# elif protocol == USR_READ_ACK:
-			# 	pass
+			elif protocol == USR_READ_ACK:
+				# 2: sender(this client), 3: target (the other user)
+				print('User [{}] read the message sent at {}'.format(
+					splitted_msg[3], convertLocalTime(time)))
 			elif protocol == USR_NOT_FOUND:
 				target = splitted_msg[2]
-				print_terminal = 'User {} has never connected to server'.format(
+				print_terminal = 'User [{}] has never connected to server'.format(
 					target)
 				print(print_terminal)
+			elif protocol == ROOM_CREATE_ACK:
+				print_terminal = 'Room <{}> created'.format(splitted_msg[2])
+				print(print_terminal)
+			elif protocol == ROOM_CREATE_DUP:
+				print_terminal = 'Name <{}> is taken'.format(splitted_msg[2])
+				print(print_terminal)
+			elif protocol == ROOM_MSG:
+				pass
+			elif protocol == ROOM_MSG_ACK:
+				pass
+			elif protocol == MEMBER_ADD_ACK:
+				pass
+			elif protocol ==MEMBER_DEL_ACK:
+				pass
 			else:
 				print(msg)
 		except IOError:
@@ -140,13 +161,34 @@ def message(client,username,database):
 				if command == '/help':
 					print(HELP)
 				elif command == '/quit':
-					print('[{}] Closing program'.format(getLocalTime()))
-					report = '{} {} {}'.format(OFFLINE,getTime(),username)
-					client.send(report.encode(FORMAT))
-					online = False
-					client.shutdown(socket.SHUT_RDWR)
-					client.close()
+					try:
+						print('[{}] Closing program'.format(getLocalTime()))
+						report = '{} {} {}'.format(OFFLINE,getTime(),username)
+						client.send(report.encode(FORMAT))
+						online = False
+						client.shutdown(socket.SHUT_RDWR)
+						client.close()
+					except OSError as error:
+						if str(error) == '[Errno 107] Transport endpoint '\
+							'is not connected':
+							pass
+						else:
+							print('{} Quit error: "{}"'.format(getLocalTime(),
+								error))
+					except Exception as error:
+						print('{} Quit error: {}'.format(getLocalTime(),
+								error))
 					break
+
+				elif command == '/room-create':
+					if len(msg_split) != 2:
+						print('Room name must be on word, you can use "_" '\
+							'instead of spaces')
+					else:
+						room_name = msg_split[1]
+						target_msg = '{} {} {} {}'.format(ROOM_CREATE, getTime(),
+							username,room_name)
+						client.send(target_msg.encode(FORMAT))
 				else:
 					# Filter all wrong len here
 					if len(msg_split) < 3:
@@ -161,6 +203,17 @@ def message(client,username,database):
 											target,content)
 							client.send(target_msg.encode(FORMAT))
 							print('Sent {}'.format(target_msg))
-
+						elif command == '/room-msg':
+							target_msg = formatMessage(ROOM_MSG, username, 
+											target,content)
+							client.send(target_msg.encode(FORMAT))
+							print('Sent {}'.format(target_msg))
+							pass
+						elif command == '/room-rename':
+							pass
+						elif command == '/room-add-usr':
+							pass
+						elif command == '/room-add-usr':
+							pass
 						else:
 							print('Unimplimented')

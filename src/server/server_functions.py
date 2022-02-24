@@ -2,7 +2,7 @@ import queue
 import socket 
 import threading
 import datetime
-import errno
+from Room import Room
 
 # Encoding format
 FORMAT = 'ascii'
@@ -39,7 +39,11 @@ USR_READ_ACK = '23'
 USR_NOT_FOUND = '24'
 
 # For rooms 
+ROOM_CREATE = '30'
+ROOM_CREATE_ACK = '301'
+ROOM_CREATE_DUP = '302'
 ROOM_MSG = '31'					#Message to rooms
+ROOM_MSG_ACK = '311'
 MEMBER_ADD_ACK = '32'
 MEMBER_DEL_ACK = '33'
 
@@ -135,32 +139,16 @@ def updateUsers(client_data,usr_queue):
 			if (11 or 10 or 9) in VERBOSE:
 				print('\nAfter adding {}:'.format(username))
 				printDatabase(client_data)
-		# clock = process_time()
-		# if clock > 2:
-		# 	for user in client_data.keys():
-		# 		if client_data[user][1]:
-		# 			try:
-		# 				client_data[user][0].send(TEST.encode(FORMAT))
-		# 			except Exception as error:
-		# 				if error.errno == errno.ECONNREFUSED:
-		# 					client_data[username] [1] = False
-		# 					client_data[user][0].shutdown(socket.SHUT_RDWR)
-		# 					client_data[user][0].close
-		# 				else:
-		# 					print('[{}] Error updating user status: {}'.format(
-		# 						getLocalTime(), error))
 
 def processQueue(client_data, msg_queue, usr_queue):
 	offline_buffer = {}
+	rooms = {}
 	while True:
 		if not msg_queue.empty():
 			current_msg = msg_queue.get()
 			splitted_msg = current_msg.split()
 			protocol = splitted_msg[0]
 			time = splitted_msg[1]
-			# sender = splitted_msg[2]
-			# target = splitted_msg[3]
-			# content = splitted_msg[4]
 
 			if protocol == USR_MSG:
 				sender = splitted_msg[2]
@@ -213,6 +201,37 @@ def processQueue(client_data, msg_queue, usr_queue):
 						offline_buffer[target].append(current_msg)
 			elif protocol == OFFLINE:
 				usr_queue.put((protocol, time,splitted_msg[2]))
+			elif protocol == USR_READ_ACK:
+				sender = splitted_msg[2]
+				if client_data[sender][1]:
+					client_data[sender][0].send(current_msg.encode(FORMAT))
+				else:
+					offline_buffer[sender].append(current_msg)
+			elif protocol == ROOM_CREATE:
+				sender = splitted_msg[2]
+				room_name = splitted_msg[3]
+				if room_name in rooms.keys():
+					reply = '{} {} {}'.format(ROOM_CREATE_DUP,getTime(),
+						room_name)
+				else:
+					rooms[room_name] = Room(room_name, sender)
+					print('[{}] Room {} created by {}'.format(getLocalTime(), 
+						room_name,sender))
+					reply = '{} {} {}'.format(ROOM_CREATE_ACK,getTime(),
+						room_name)
+				if client_data[sender][1]:
+					client_data[sender][0].send(reply.encode(FORMAT))
+				else:
+					offline_buffer[sender].append(reply)
+			elif protocol == ROOM_MSG:
+				
+				pass
+			elif protocol == ROOM_MSG_ACK:
+				pass
+			elif protocol == MEMBER_ADD_ACK:
+				pass
+			elif protocol == MEMBER_DEL_ACK:
+				pass
 			else:
 				print('[{}] Unimplemented: {}'.format(getLocalTime(),
 													current_msg))
