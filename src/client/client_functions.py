@@ -10,11 +10,14 @@ HELP = '''Commands:
 	/room-create {room name} - Creates a new room
 	/room-msg {room name} {message} - send message to a chat room
 	/room-rename {room name} {new name} - renames a room
-	/room-add-usr {room name} {username} - add an user to the room
-	/room-remove-usr {room name} {username} - removes an user from the room'''
+	/room-add {room name} {username} - add an user to the room
+	/room-del {room name} {username} - removes an user from the room
+	/room-accept {room name} to accept a room invite
+	/room-deny {room name} to decline room invite'''
 
 COMMAND_LIST = ['/help','/quit', '/msg', '/room-create','/room-msg', 
-	'/room-rename', '/room-add-usr','/room-remove-usr']
+	'/room-rename', '/room-add','/room-del', '/room-accept',
+	'/room-deny']
 
 USER = '0'
 ROOM = '1'
@@ -34,13 +37,22 @@ USR_NOT_FOUND = '24'
 ROOM_CREATE = '30'
 ROOM_CREATE_ACK = '301'
 ROOM_CREATE_DUP = '302'
+
 ROOM_MSG = '31'					#Message to rooms
 ROOM_MSG_ACK = '311'
-MEMBER_ADD_ACK = '32'
-MEMBER_DEL_ACK = '33'
+ROOM_NOT_FOUND = '312'
 
-# Testing
-TEST = '40'
+MEMBER_ADD = '32'
+MEMBER_ADD_ACK = '321'
+MEMBER_ADD_DENY = '322'
+
+MEMBER_DEL = '33'
+MEMBER_DEL_ACK = '331'
+
+ROOM_RENAME = '34'
+ROOM_RENAME_ACK = '341'
+
+ERROR = '40'
 #-------------------------------------------------------------------------------
 
 VERBOSE = ()
@@ -85,6 +97,7 @@ def receive(client,username):
 			# 0: Protocol, 1:Time
 			protocol = splitted_msg[0]
 			time = float(splitted_msg[1])
+
 			if protocol == USR_MSG:
 				# 2: sender, 3: target (this client), 4-:Content
 				sender = splitted_msg[2]
@@ -103,29 +116,92 @@ def receive(client,username):
 				print_terminal = 'User [{}] is offline, last seen on {}'.format(
 					target, convertDateTime(time))
 				print(print_terminal)
+				
 			elif protocol == USR_READ_ACK:
 				# 2: sender(this client), 3: target (the other user)
 				print('User [{}] read the message sent at {}'.format(
 					splitted_msg[3], convertLocalTime(time)))
+
 			elif protocol == USR_NOT_FOUND:
 				target = splitted_msg[2]
 				print_terminal = 'User [{}] has never connected to server'.format(
 					target)
 				print(print_terminal)
+
 			elif protocol == ROOM_CREATE_ACK:
 				print_terminal = 'Room <{}> created'.format(splitted_msg[2])
 				print(print_terminal)
+
 			elif protocol == ROOM_CREATE_DUP:
 				print_terminal = 'Name <{}> is taken'.format(splitted_msg[2])
 				print(print_terminal)
+
 			elif protocol == ROOM_MSG:
-				pass
+				# 2: sender, 3: target (the room), 4-:Content
+				sender = splitted_msg[2]
+				room_name = splitted_msg[3]
+				content = ' '.join(splitted_msg[4:])
+				print_terminal = '{} <{}> [{}] {}'.format(
+					convertLocalTime(time),room_name, sender, content)
+				print(print_terminal)
+
+				reply = '{} {} {} {} {}'.format(ROOM_MSG_ACK, getTime(), 
+					sender,room_name,username)
+				client.send(reply.encode(FORMAT))
+
 			elif protocol == ROOM_MSG_ACK:
-				pass
+				room_name = splitted_msg[3]
+				receiver = splitted_msg[4]
+				terminal_print = '<{}> User {} has read your message'\
+					' from {}'.format(room_name, receiver,convertDateTime(time))
+				print(terminal_print)
+
+			elif protocol == ROOM_NOT_FOUND:
+				room_name = splitted_msg[2]
+				terminal_print = 'Room <{}> is not in database'.format(
+					room_name)
+				print(terminal_print)
+
+			elif protocol == MEMBER_ADD:
+				sender = splitted_msg[2]
+				room_name = splitted_msg[3]
+				terminal_print = 'User [{}] invited you to join <{}>, '\
+					'type "/room-accept {}" to accept\n/room-deny {} '\
+					'to decline'.format(sender, room_name, room_name, room_name)
+				print(terminal_print)
+
 			elif protocol == MEMBER_ADD_ACK:
-				pass
-			elif protocol ==MEMBER_DEL_ACK:
-				pass
+				receiver = splitted_msg[2]
+				room_name = splitted_msg[3]
+				
+				terminal_print = 'User [{}] accepted your invitation '\
+					'to <{}>'.format(receiver,room_name)
+				print(terminal_print)
+
+			elif protocol == MEMBER_ADD_DENY:
+				receiver = splitted_msg[2]
+				room_name = splitted_msg[3]
+				terminal_print = 'User [{}] declined your invitation '\
+					'to <{}>'.format(receiver,room_name)
+				print(terminal_print)
+
+			elif protocol == MEMBER_DEL:
+				sender = splitted_msg[2]
+				room_name = splitted_msg[3]
+				terminal_print = 'You are removed from <{}> by {}'.format(
+					room_name,sender)
+				print(terminal_print)
+
+			elif protocol == MEMBER_DEL_ACK:
+				room_name = splitted_msg[3]
+				removed_user = splitted_msg[4]
+				terminal_print = 'User [{}] is removed from <{}>'.format(
+					removed_user,room_name)
+				print(terminal_print)
+			elif protocol == ERROR:
+				msg = ' '.join(splitted_msg[2:])
+				terminal_print = 'ERROR: {}'.format(msg)
+				print(terminal_print)
 			else:
 				print(msg)
 		except IOError:
@@ -189,6 +265,26 @@ def message(client,username,database):
 						target_msg = '{} {} {} {}'.format(ROOM_CREATE, getTime(),
 							username,room_name)
 						client.send(target_msg.encode(FORMAT))
+
+				elif command == '/room-accept':
+					if len(msg_split) != 2:
+						print('Room name must be on word, you can use "_" '\
+							'instead of spaces')
+					else:
+						room_name = msg_split[1]
+						target_msg = '{} {} {} {}'.format(MEMBER_ADD_ACK,
+							getTime(),username,room_name)
+						client.send(target_msg.encode(FORMAT))
+
+				elif command == '/room-deny':
+					if len(msg_split) != 2:
+						print('Room name must be on word, you can use "_" '\
+							'instead of spaces')
+					else:
+						room_name = msg_split[1]
+						target_msg = '{} {} {} {}'.format(MEMBER_ADD_DENY, 
+							getTime(),username,room_name)
+						client.send(target_msg.encode(FORMAT))
 				else:
 					# Filter all wrong len here
 					if len(msg_split) < 3:
@@ -196,24 +292,53 @@ def message(client,username,database):
 					else:
 
 						target = msg_split[1]
-						content = ' '.join(msg_split[2:])
+						
 
 						if command == '/msg':
+							content = ' '.join(msg_split[2:])
 							target_msg = formatMessage(USR_MSG, username, 
 											target,content)
 							client.send(target_msg.encode(FORMAT))
 							print('Sent {}'.format(target_msg))
+							
 						elif command == '/room-msg':
+							content = ' '.join(msg_split[2:])
 							target_msg = formatMessage(ROOM_MSG, username, 
 											target,content)
 							client.send(target_msg.encode(FORMAT))
 							print('Sent {}'.format(target_msg))
-							pass
+
 						elif command == '/room-rename':
-							pass
-						elif command == '/room-add-usr':
-							pass
-						elif command == '/room-add-usr':
-							pass
+							if len (msg_split) != 3:
+								print('Room name must be on word, you can'\
+									' use "_" instead of spaces')
+								continue
+
+							new_name = msg_split[2]
+							target_msg = formatMessage(ROOM_RENAME, username, 
+											target,new_name)
+							client.send(target_msg.encode(FORMAT))
+							print('Sent {}'.format(target_msg))
+
+						elif command == '/room-add':
+							if len (msg_split) != 3:
+								print('Room name and username are one word each')
+								continue
+
+							new_member = msg_split[2]
+							target_msg = formatMessage(MEMBER_ADD, username, 
+											target,new_member)
+							client.send(target_msg.encode(FORMAT))
+							print('Sent {}'.format(target_msg))
+
+						elif command == '/room-del':
+							if len (msg_split) != 3:
+								print('Room name and username are one word each')
+								continue
+							remove_user = msg_split[2]
+							target_msg = formatMessage(MEMBER_DEL, username, 
+											target,remove_user)
+							client.send(target_msg.encode(FORMAT))
+							print('Sent {}'.format(target_msg))
 						else:
 							print('Unimplimented')
