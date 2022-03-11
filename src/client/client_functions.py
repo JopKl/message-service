@@ -124,7 +124,7 @@ def receive(client,username):
 
 			elif protocol == USR_NOT_FOUND:
 				target = splitted_msg[2]
-				print_terminal = 'User [{}] has never connected to server'.format(
+				print_terminal = 'User [{}] not found in this context'.format(
 					target)
 				print(print_terminal)
 
